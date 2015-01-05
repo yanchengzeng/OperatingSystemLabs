@@ -2,28 +2,53 @@
 #include "dsh.h"
 #include <assert.h>
 
-void seize_tty(pid_t callingprocess_pgid); 
-void continue_job(job_t *j); 
-void spawn_job(job_t *j, bool fg); 
+void seize_tty(pid_t callingprocess_pgid); /* Grab control of the terminal for the calling process pgid.  */
+void continue_job(job_t *j); /* resume a stopped job */
+void spawn_job(job_t *j, bool fg); /* spawn a new job */
 void wait_call(job_t* j,int num);
 
 
+/* Sets the process group id for a given job and process */
 int set_child_pgid(job_t *j, process_t *p) {
-	if (j->pgid < 0) 
+	if (j->pgid < 0) /* first child: use its pid for job pgid */
 		j->pgid = p->pid;
 	return(setpgid(p->pid,j->pgid));
 }
 
+/* Creates the context for a new child by setting the pid, pgid and tcsetpgrp */
 void new_child(job_t *j, process_t *p, bool fg) {
+	/* establish a new process group, and put the child in
+	 * foreground if requested
+	 */
+
+	/* Put the process into the process group and give the process
+	 * group the terminal, if appropriate.  This has to be done both by
+	 * the dsh and in the individual child processes because of
+	 * potential race conditions.
+	 * */
 	p->pid = getpid();
+	
+	/* also establish child process group in child to avoid race (if parent has not done it yet). */
 	set_child_pgid(j, p);
+	
 	if(fg) 
 		seize_tty(j->pgid); 
+		
 	perror("seize_tty: ");
 	signal(SIGTTOU, SIG_DFL);
 	perror("Signal setting: ");
 }
 
+
+/* Spawning a process with job control. fg is true if the
+ * newly-created process is to be placed in the foreground.
+ * (This implicitly puts the calling process in the background,
+ * so watch out for tty I/O after doing this.) pgid is -1 to
+ * create a new job, in which case the returned pid is also the
+ * pgid of the new job.  Else pgid specifies an existing job's
+ * pgid: this feature is used to start the second or
+ * subsequent processes in a pipeline.
+ * */
 void spawn_job(job_t *j, bool fg) {
 	pid_t pid;
 	process_t *p;
@@ -58,13 +83,15 @@ void spawn_job(job_t *j, bool fg) {
 
 	int child_track = -1;
 
+
+	//finishing creating pipes, now ready for fork
 	for(p = j->first_process; p; p = p->next) {
 		child_track++;
 		switch (pid = fork()) {
-		case -1: 
+		case -1:  /* fork failure */
 			perror("fork");
 			exit(EXIT_FAILURE);
-		case 0: 
+		case 0: /* child process  */
 			p->pid = getpid();
 			new_child(j, p, fg);
 			if (p->ifile != NULL) {
@@ -75,13 +102,14 @@ void spawn_job(job_t *j, bool fg) {
 				}
 
 			}
+			//check for output redirection
 			if (p->ofile != NULL) {
 				if (child_track == process_num - 1) {
 					close(STDOUT_FILENO);
 					int fd = creat(p->ofile, 0777); //open(p->ofile,O_WRONLY);
 				}
 			}
-
+			//check for output redirection
 			if (is_pipe) {
 				int i;
 				for(i=0; i<pipe_num; i++) {
@@ -100,7 +128,7 @@ void spawn_job(job_t *j, bool fg) {
 					close(STDIN_FILENO);
 					dup2(pipefd[child_track-1][0],STDIN_FILENO);
 					close(pipefd[child_track-1][0]);
-				} else { 
+				} else { // or it is in the middle
 					close(pipefd[child_track-1][1]);
 					dup2(pipefd[child_track-1][0],STDIN_FILENO);
 					close(pipefd[child_track-1][0]);
@@ -118,7 +146,8 @@ void spawn_job(job_t *j, bool fg) {
 			exit(EXIT_FAILURE);  
 			break;    
 
-		default: 
+		default: /* parent */
+			/* establish child process group */
 			p->pid = pid;
 			set_child_pgid(j, p);
 		}
@@ -160,12 +189,16 @@ void wait_call(job_t* j, int num){
 	return;
 }
 
-
+/* Sends SIGCONT signal to wake up the blocked job */
 void continue_job(job_t *j){
 	if(kill(-j->pgid, SIGCONT) < 0)
 		perror("kill(SIGCONT)");
 }
 
+/*
+ * builtin_cmd - If the user has typed a built-in command then execute
+ * it immediately.
+ */
 bool builtin_cmd(job_t *last_job, int argc, char **argv){
 
 	if (!strcmp(argv[0], "quit")) {
@@ -208,6 +241,7 @@ bool builtin_cmd(job_t *last_job, int argc, char **argv){
 		return false;       
 }
 
+/* Build prompt messaage */
 char* promptmsg(){
 	char s1[] = "dsh-";
 	char s2[10];
