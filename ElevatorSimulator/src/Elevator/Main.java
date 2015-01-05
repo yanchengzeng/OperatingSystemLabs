@@ -19,9 +19,6 @@ public class Main {
 		
 			
 		
-		//myThreads[0].start();
-		
-		//myThreads[3].start();
 		
 		for (int i = 0; i < 5; i++) {
 			myThreads[i].start();
