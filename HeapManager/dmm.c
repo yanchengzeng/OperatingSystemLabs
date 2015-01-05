@@ -4,10 +4,24 @@
 #include "dmm.h"
 
 typedef struct metadata {
+	
+	       /* size_t is the return type of the sizeof operator. Since the size of
+ 	* an object depends on the architecture and its implementation, size_t 
+	* is used to represent the maximum size of any object in the particular
+ 	* implementation. 
+	* size contains the size of the data object or the amount of free
+ 	* bytes 
+	*/
+
+	 //I maintained the same metadata structure and used the original three variables
 	size_t size;
 	struct metadata* next;
 	struct metadata* prev; 
 } metadata_t;
+
+/* freelist maintains all the blocks which are not in use; freelist is kept
+ * always sorted to improve the efficiency of coalescing 
+ */
 
 static metadata_t* freelist = NULL;
 static metadata_t* original = NULL;
@@ -26,6 +40,9 @@ void* dmalloc(size_t numbytes) {
 
 	
 	if (freelist->next == NULL) {
+	  //Deal with the case when freelist is the last free node
+	  //Check first if freelist is big enough for required allocation
+	  
 	  if(freelist->size >= aligned_num) {
 		 metadata_t* temp = freelist;
 		 if (freelist->size<= aligned_num + METADATA_T_ALIGNED){
@@ -49,10 +66,10 @@ void* dmalloc(size_t numbytes) {
             }
 	} else {
 	  metadata_t* temp = freelist;
-	    if (temp->size<aligned_num)
-	    {	
-	      if (temp->next != NULL)
-		{
+	  
+	  //if freelist is not big enough then we need to traverse down the list
+	    if (temp->size<aligned_num){	
+	      if (temp->next != NULL){
 		temp = temp->next;
 		} else {
 		return NULL;
@@ -132,6 +149,7 @@ void dfree(void* ptr) {
   if(pointer->prev != NULL)
   	return;
   	
+  //This is the case when there is no free node in the list	
   if(freelist == NULL) {
   	freelist = pointer;
 	freelist->next = NULL;
@@ -149,7 +167,7 @@ void dfree(void* ptr) {
       return;
   } 
 
-
+  //this is the case where the payload is sitting right next to the freelist on the left
   if (garbage_ptr == freelist) {
 	if (freelist->next != NULL) {
 		pointer->next = freelist->next;
@@ -174,7 +192,7 @@ void dfree(void* ptr) {
 	  freelist->size = freelist->size + ((void*)garbage_ptr-(void*)pointer);
 	  return;
       }
-      
+      //now there are other free nodes after freelist, thus check if freelist->next is sitting right next to ptr
       if (garbage_ptr == freelist->next)  {
       	
 	  freelist->size = freelist->size+freelist->next->size+METADATA_T_ALIGNED+((void*)garbage_ptr-(void*)pointer);
@@ -210,7 +228,7 @@ void dfree(void* ptr) {
   while(search_ptr < pointer && (search_ptr->next != NULL) ) {
       search_ptr = search_ptr->next;
   }
-
+ //now the search_ptr sits next to ptr on the right
   if (search_ptr > pointer) {
       if((garbage_ptr == search_ptr) && ((void*)search_ptr->prev+search_ptr->prev->size+METADATA_T_ALIGNED == pointer))	{	
 	  if(search_ptr->next == NULL){
@@ -259,7 +277,7 @@ void dfree(void* ptr) {
 	}	
       return;
     }
-
+  //now ptr must be on the right side of search_ptr
   if ((void*)search_ptr+search_ptr->size != pointer) {
       search_ptr->next = pointer;
       pointer->prev = search_ptr;
