@@ -11,7 +11,7 @@ public class Building extends AbstractBuilding {
 	
 	public Building(int numFloors, int numElevators) {
 		super(numFloors, numElevators);
-		// TODO Auto-generated constructor stub
+
 	}
 	
 	public Building(int numFloors, int numElevators, int maxOccupancyThreshold){
@@ -20,7 +20,6 @@ public class Building extends AbstractBuilding {
 		elevatorList = new ArrayList<Elevator>();
 		for (int i = 0; i < numElevators; i++) {
 			elevatorList.add(new Elevator(numFloors,i,maxOccupancyThreshold));
-			System.out.println("There is one elevator");
 		}
 		
 	}
@@ -41,7 +40,6 @@ public class Building extends AbstractBuilding {
 				}else{
 					if (!elevator.direc)
 					distance+=5;
-					//distance+= (5-elevator.currentFloor+fromFloor)*10;
 				}
 			
 		} else {
@@ -58,7 +56,6 @@ public class Building extends AbstractBuilding {
 			} else {
 				if (elevator.direc)
 				distance+=5;
-				//distance+= (5-fromFloor+elevator.currentFloor)*10;
 			}
 		}
 		return distance;
@@ -97,21 +94,17 @@ public class Building extends AbstractBuilding {
 	@Override
 	public AbstractElevator CallUp(int fromFloor) {
 		synchronized(this){
-			System.out.println("Passenger "+Thread.currentThread().getId()+" Takes Building lock in CallUp on floor"+ fromFloor);
 			int pickup = 0;
 			int highScore = 0;
 			int[] scores = new int[numElevators];
 			for (int i = 0; i < numElevators; i++){
 				scores[i] = EstimateDistance(elevatorList.get(i), fromFloor, true) + EstimatePeople(elevatorList.get(i), fromFloor, true);
-				System.out.print("The score of elevator "+i+" for passenger "+Thread.currentThread().getId()+" is "+scores[i]+" ");
 				if (scores[i] > highScore){
 					pickup = i;
 					highScore = scores[i];
 				}
 			}
-			System.out.println();
 			elevatorList.get(pickup).lock1(fromFloor);
-			System.out.println("Passenger "+Thread.currentThread().getId()+" gets elevator "+pickup+" Releases Building lock in CallUp on floor"+ fromFloor);
 			return elevatorList.get(pickup);
 		}
 	}
@@ -119,21 +112,17 @@ public class Building extends AbstractBuilding {
 	@Override
 	public AbstractElevator CallDown(int fromFloor) {
 		synchronized(this){
-				System.out.println("Passenger "+Thread.currentThread().getId()+" Takes Building lock in CallDown on floor "+ fromFloor);
 				int pickup = 0;
 				int highScore = 0;
 				int[] scores = new int[numElevators];
 				for (int i = 0; i < numElevators; i++){
 					scores[i] = EstimateDistance(elevatorList.get(i), fromFloor, false) + EstimatePeople(elevatorList.get(i), fromFloor, false);
-					System.out.print("The score of elevator "+i+" for passenger "+Thread.currentThread().getId()+" is "+scores[i]+" ");
 					if (scores[i] > highScore){
 						pickup = i;
 						highScore = scores[i];
 					}
 				}
-				System.out.println("Passenger "+Thread.currentThread().getId()+" gets elevator "+pickup);
 				elevatorList.get(pickup).lock2(fromFloor);
-				System.out.println("Passenger "+Thread.currentThread().getId()+" Releases Building lock in CallDown on floor"+ fromFloor);
 				return elevatorList.get(pickup);
 			}
 	}
